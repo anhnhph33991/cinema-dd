@@ -34,7 +34,10 @@ class AuthController extends Controller
 
         $token = $user->createToken(env('APP_NAME'))->plainTextToken;
 
-        return $this->successResponse(['token' => $token], 'Login success');
+        return $this->successResponse([
+            'user' => $user,
+            'token' => $token
+        ], 'Login success');
     }
 
     public function register(StoreRegisterRequest $request)
@@ -46,7 +49,10 @@ class AuthController extends Controller
         $token = $user->createToken(env('APP_NAME'))->plainTextToken;
 
         return $this->successResponse(
-            $token,
+            [
+                'user' => $user,
+                'token' => $token
+            ],
             'Tạo tài khoản thành công',
             Response::HTTP_CREATED
         );

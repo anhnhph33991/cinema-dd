@@ -25,4 +25,9 @@ class Room extends Model
         'is_active',
         'surcharge',
     ];
+
+    public function movie()
+    {
+        return $this->belongsTo(Movie::class);
+    }
 }

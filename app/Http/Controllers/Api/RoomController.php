@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreRoomRequest;
 use App\Models\Room;
 use App\Traits\ApiResponseTrait;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -47,13 +48,52 @@ class RoomController extends Controller
         }
     }
 
+    // public function chooseSeat(Request $request, $roomId)
+    // {
+    //     $request->validate([
+    //         'seat_id' => 'required|string',
+    //         'user_id' => 'required|exists:users,id',
+    //     ]);
+
+    //     // Lấy room từ database
+    //     $room = Room::findOrFail($roomId);
+    //     $seats = json_decode($room->seat_structures, true);
+
+    //     // Kiểm tra nếu ghế đã được giữ
+    //     if ($seats[$request->seat_id]['status'] !== 'available') {
+    //         return response()->json(['error' => 'Seat is already taken'], 409);
+    //     }
+
+    //     // Cập nhật trạng thái ghế
+    //     $seats[$request->seat_id]['user_id'] = $request->user_id;
+    //     $seats[$request->seat_id]['status'] = 'holding';
+    //     $seats[$request->seat_id]['hold_time'] = now()->addMinutes(10)->timestamp; // 10 phút giữ chỗ
+
+    //     // Lưu vào database
+    //     $room->seat_structures = json_encode($seats);
+    //     $room->save();
+
+    //     // Cập nhật Firebase
+    //     $firebase = (new Factory)
+    //         ->withServiceAccount(storage_path('firebase_credentials.json'))
+    //         ->withDatabaseUri(env('FIREBASE_DATABASE_URL'))
+    //         ->createDatabase();
+
+    //     $firebase->getReference("rooms/{$roomId}/seats/{$request->seat_id}")
+    //         ->set($seats[$request->seat_id]);
+
+    //     return response()->json(['message' => 'Seat held successfully']);
+    // }
+
     /**
      * Display the specified resource.
      */
     public function show(string $name)
     {
         try {
-            $room = Room::query()->firstWhere('name', $name);
+            $room = Room::with(['movie:id,name,slug,img_thumbnail,duration,release_date,end_date,trailer_url,is_active,created_at,updated_at'])
+                ->where('name', $name)
+                ->first();
 
             if (!$room) {
                 throw new \Exception('Phòng không tồn tại', Response::HTTP_NOT_FOUND);
@@ -130,6 +170,8 @@ class RoomController extends Controller
             return $this->errorResponse($th->getMessage());
         }
     }
+
+    public function chooseSeat() {}
 
     /**
      * Remove the specified resource from storage.

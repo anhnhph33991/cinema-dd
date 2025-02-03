@@ -15,16 +15,17 @@ class UserResource extends JsonResource
      */
     public function toArray(Request $request)
     {
+        $pathAvatar = Storage::exists($this->avatar) ? Storage::url($this->avatar) : null;
         return [
             'id' => $this->id,
             'name' => $this->name,
             'email' => $this->email,
-            'avatar' => $this->avatar ? Storage::url($this->avatar)  : null,
-            'phone' => $this->phone ?? null,
-            'address' => $this->address ?? null,
-            'gender' => $this->gender ?? null,
-            'birthday' => $this->birthday ?? null,
-            'role' => $this->role ?? null,
+            'avatar' => $pathAvatar,
+            'phone' => $this->phone,
+            'address' => $this->address,
+            'gender' => $this->gender,
+            'birthday' => $this->birthday,
+            'role' => $this->role,
         ];
     }
 }

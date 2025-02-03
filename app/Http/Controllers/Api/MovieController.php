@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreMovieRequest;
+use App\Http\Resources\MovieResource;
 use App\Models\Movie;
+use App\Models\Room;
 use App\Traits\ApiResponseTrait;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class MovieController extends Controller
@@ -21,7 +24,7 @@ class MovieController extends Controller
         try {
             $movies = Movie::query()->orderByDesc('id')->get();
 
-            return $this->successResponse($movies, 'Danh sách phim');
+            return $this->successResponse(MovieResource::collection($movies), 'Danh sách phim');
         } catch (\Throwable $th) {
             return $this->errorResponse($th->getMessage());
         }
@@ -37,7 +40,7 @@ class MovieController extends Controller
             $data['slug'] = Str::slug($data['name']) . '-' . Str::uuid();
 
             if ($request->hasFile('img_thumbnail')) {
-                $data['img_thumbnail'] = 'new Image';
+                $data['img_thumbnail'] = Storage::put('movies', $request->file('img_thumbnail'));
             }
 
             Movie::query()->create($data);
@@ -81,6 +84,20 @@ class MovieController extends Controller
     {
         try {
             return $this->successResponse(null, 'Hiện tại chưa hỗ trợ xóa phim');
+        } catch (\Throwable $th) {
+            return $this->errorResponse($th->getMessage());
+        }
+    }
+
+    public function showRoom($id)
+    {
+        try {
+            $result = Room::query()
+                ->orderByDesc('id')
+                ->where('movie_id', $id)
+                ->get();
+
+            return $this->successResponse($result, 'Danh sách phòng mà phim hiện có');
         } catch (\Throwable $th) {
             return $this->errorResponse($th->getMessage());
         }

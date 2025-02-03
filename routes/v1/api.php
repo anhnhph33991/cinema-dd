@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\FirebaseController;
 use App\Http\Controllers\Api\MovieController;
 use App\Http\Controllers\Api\RoomController;
 use App\Http\Controllers\Api\UserController;
@@ -27,8 +28,12 @@ Route::middleware('auth:sanctum')
 
         Route::prefix('movies')
             ->group(function () {
-                Route::get('/', [MovieController::class, 'index']);
-                Route::get('/{slug}', [MovieController::class, 'show']);
+                Route::get('/', [MovieController::class, 'index'])
+                    ->withoutMiddleware('auth:sanctum');
+                Route::get('/{slug}', [MovieController::class, 'show'])
+                    ->withoutMiddleware('auth:sanctum');
+                Route::get('/{id}/rooms', [MovieController::class, 'showRoom'])
+                    ->withoutMiddleware('auth:sanctum');
 
                 Route::middleware('admin')->group(function () {
                     Route::post('/', [MovieController::class, 'store']);
@@ -37,8 +42,10 @@ Route::middleware('auth:sanctum')
 
         Route::prefix('rooms')
             ->group(function () {
-                Route::get('/', [RoomController::class, 'index']);
-                Route::get('/{name}', [RoomController::class, 'show']);
+                Route::get('/', [RoomController::class, 'index'])
+                    ->withoutMiddleware('auth:sanctum');
+                Route::get('/{name}', [RoomController::class, 'show'])
+                    ->withoutMiddleware('auth:sanctum');
 
                 Route::middleware('admin')->group(function () {
                     Route::post('/', [RoomController::class, 'store']);
@@ -46,3 +53,7 @@ Route::middleware('auth:sanctum')
                 });
             });
     });
+
+// Route::get('/firebase/rooms', [FirebaseController::class, 'getRooms']);
+
+Route::post('/rooms/{roomId}/choose-seat', [RoomController::class, 'chooseSeat']);
