@@ -10,6 +10,9 @@ use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
+use Kreait\Firebase\Factory;
+use Kreait\Firebase\ServiceAccount;
 
 class RoomController extends Controller
 {
@@ -17,6 +20,18 @@ class RoomController extends Controller
     /**
      * Display a listing of the resource.
      */
+
+    protected $database;
+
+    public function __construct()
+    {
+        $factory = (new Factory)
+            ->withServiceAccount(storage_path(env('FIREBASE_CREDENTIALS')))
+            ->withDatabaseUri(env('FIREBASE_DATABASE_URL'));
+
+        $this->database = $factory->createDatabase();
+    }
+
     public function index()
     {
         try {
@@ -38,6 +53,9 @@ class RoomController extends Controller
             $data['seat_structures'] = $this->generateSeatStructures();
 
             Room::create($data);
+
+            $reference = $this->database->getReference('rooms/' . $data['name'] . '/seatMap');
+            $reference->set($data['seat_structures']);
 
             return $this->successResponse(
                 $data,
@@ -92,34 +110,41 @@ class RoomController extends Controller
     public function show(string $name)
     {
         try {
-            $room = Room::with(['movie:id,name,slug,img_thumbnail,duration,release_date,end_date,trailer_url,is_active,created_at,updated_at'])
-                ->where('name', $name)
-                ->first();
+            $roomRef = $this->database->getReference('rooms/' . $name);
+            $roomData = $roomRef->getValue();
 
-            if (!$room) {
+            if (!$roomData) {
                 throw new \Exception('Phòng không tồn tại', Response::HTTP_NOT_FOUND);
             }
 
-            $seats = json_decode($room['seat_structures'], true);
-            $seatMap = [];
+            $seatMapRef = $this->database->getReference('rooms/' . $name . '/seatMap');
+            $seatMap = $seatMapRef->getValue();
+
+            if (is_string($seatMap)) {
+                $seatMap = json_decode($seatMap, true);
+            }
+
+            if (!is_array($seatMap)) {
+                $seatMap = [];
+            }
+
             $totalSeats = 0;
 
-            foreach ($seats as $seat) {
-                $coordinates_y = $seat['coordinates_y'];
-                $coordinates_x = $seat['coordinates_x'];
-
-                if (!isset($seatMap[$coordinates_y])) {
-                    $seatMap[$coordinates_y] = [];
+            foreach ($seatMap as $seats) {
+                if (!is_array($seats)) {
+                    continue;
                 }
 
-                $seat['price'] += $room->surcharge;
+                foreach ($seats as $seat) {
+                    if (!is_array($seat)) {
+                        continue;
+                    }
 
-                $seatMap[$coordinates_y][$coordinates_x] = $seat;
+                    if (isset($roomData['surcharge'])) {
+                        $seat['price'] += $roomData['surcharge'];
+                    }
 
-                if ($seat['type_seat_id'] == 3) {
-                    $totalSeats += 2;
-                } else {
-                    $totalSeats++;
+                    $totalSeats += ($seat['type_seat_id'] == 3) ? 2 : 1;
                 }
             }
 
@@ -127,12 +152,14 @@ class RoomController extends Controller
                 'matrix' => Room::MATRIX,
                 'seatMap' => $seatMap,
                 'totalSeats' => $totalSeats,
-                'room' => $room
+                'room' => $roomData,
             ], "Phòng {$name} thành công");
+
         } catch (\Throwable $th) {
             return $this->errorResponse($th->getMessage());
         }
     }
+
 
     public function generateSeatStructures()
     {
@@ -146,13 +173,14 @@ class RoomController extends Controller
                 $price = $type_seat_id == 1 ? 30000 : 50000;
 
                 $seatStructures[] = [
+                    'seat_id' => $row . '' . (string) $column,
                     'coordinates_x' => (string) $column,
                     'coordinates_y' => $row,
-                    'type_seat_id'  => $type_seat_id,
-                    'user_id'       => null,
-                    'status'        => 'available',
-                    'hold_time'     => null,
-                    'price'         => $price
+                    'type_seat_id' => $type_seat_id,
+                    'user_id' => null,
+                    'status' => 'available',
+                    'hold_time' => null,
+                    'price' => $price
                 ];
             }
         }
@@ -172,21 +200,114 @@ class RoomController extends Controller
         }
     }
 
-    public function chooseSeat(Request $request, string $roomId)
+    public function chooseSeat(Request $request, string $roomName)
     {
         try {
-            $room = Room::query()->findOrFail($roomId);
+            $room = Room::query()->firstWhere('name', $roomName);
+            if (!$room) {
+                throw new ModelNotFoundException('Phòng không tồn tại');
+            }
+
+            $seatStructures = $room->seat_structures;
+
+            if (is_string($seatStructures)) {
+                $seatStructures = json_decode($seatStructures, true);
+            }
+
+            $seatIndex = null;
+            foreach ($seatStructures as $index => $seat) {
+                if ($seat['seat_id'] == $request->seat_id) {
+                    $seatIndex = $index;
+                    break;
+                }
+            }
+
+            if ($seatIndex === null) {
+                return $this->errorResponse('Ghế không tồn tại trong phòng', Response::HTTP_NOT_FOUND);
+            }
+
+            $seatStructures[$seatIndex] = array_merge($seatStructures[$seatIndex], [
+                'status' => $request->status,
+                'user_id' => $request->user_id,
+            ]);
+
+            $room->seat_structures = $seatStructures;
+
+            $room->save();
+
+            $seatMapRef = $this->database->getReference('rooms/' . $room->name . '/seatMap');
+            $seatMap = json_decode($seatMapRef->getValue(), true);
+
+            $seatKey = null;
+            foreach ($seatMap as $key => $seat) {
+                if (($seat['seat_id'] ?? null) === $request->seat_id) {
+                    $seatKey = $key;
+                    break;
+                }
+            }
+
+            $seatMap[$seatKey] = array_merge($seatMap[$seatKey], [
+                'status' => $request->status,
+                'user_id' => $request->user_id,
+            ]);
+
+            $seatMapRef->set(json_encode($seatMap));
 
             return $this->successResponse([
-                'id' => $roomId,
-                'request' => $request->all(),
+                'id' => $room->id
             ], 'Data từ client gửi lên');
         } catch (\Throwable $th) {
-
             if ($th instanceof ModelNotFoundException) {
                 return $this->errorResponse('Room không tồn tại', Response::HTTP_NOT_FOUND);
             }
 
+            return $this->errorResponse($th->getMessage());
+        }
+    }
+
+    public function updateSeat(Request $request, string $roomName)
+    {
+        try {
+            $room = Room::query()->firstWhere('name', $roomName);
+            if (!$room) {
+                throw new ModelNotFoundException('Phòng không tồn tại');
+            }
+
+            $seatStructures = $room->seat_structures;
+            if (is_string($seatStructures)) {
+                $seatStructures = json_decode($seatStructures, true);
+            }
+
+            foreach ($seatStructures as $seat) {
+                if ($seat['user_id'] == $request->user_id) {
+                    $seat['status'] = 'available';
+                    $seat['user_id'] = null;
+                }
+            }
+
+            $room->save();
+
+            $seatMapRef = $this->database->getReference('rooms/' . $room->name . '/seatMap');
+            $seatMap = $seatMapRef->getValue();
+
+            if (is_string($seatMap)) {
+                $seatMap = json_decode($seatMap, true);
+            }
+
+            foreach ($seatMap as $seat) {
+                if ($seat['user_id'] == $request->user_id) {
+                    $seat['status'] = 'available';
+                    $seat['user_id'] = null;
+                }
+            }
+
+            $seatMapRef->set($seatMap);
+
+            return $this->successResponse([
+                'id' => $room->id
+            ], 'Cập nhật ghế thành công');
+
+        } catch (\Throwable $th) {
             return $this->errorResponse($th->getMessage());
         }
     }

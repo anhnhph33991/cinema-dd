@@ -26,6 +26,10 @@ class Room extends Model
         'surcharge',
     ];
 
+    protected $casts = [
+        'seat_structures' => 'array',
+    ];
+
     public function movie()
     {
         return $this->belongsTo(Movie::class);

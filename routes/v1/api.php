@@ -58,6 +58,7 @@ Route::middleware('auth:sanctum')
 
 // Route::get('/firebase/rooms', [FirebaseController::class, 'getRooms']);
 
-Route::post('/rooms/{roomId}/choose-seat', [RoomController::class, 'chooseSeat']);
+Route::post('/rooms/{roomName}/choose-seat', [RoomController::class, 'chooseSeat']);
+Route::post('/rooms/{roomName}/update-seat', [RoomController::class, 'updateSeat']);
 
 Route::post('/checkout', [TicketController::class, 'store']);
