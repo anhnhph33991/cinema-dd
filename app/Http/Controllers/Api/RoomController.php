@@ -7,6 +7,7 @@ use App\Http\Requests\StoreRoomRequest;
 use App\Models\Room;
 use App\Traits\ApiResponseTrait;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
@@ -171,7 +172,24 @@ class RoomController extends Controller
         }
     }
 
-    public function chooseSeat() {}
+    public function chooseSeat(Request $request, string $roomId)
+    {
+        try {
+            $room = Room::query()->findOrFail($roomId);
+
+            return $this->successResponse([
+                'id' => $roomId,
+                'request' => $request->all(),
+            ], 'Data từ client gửi lên');
+        } catch (\Throwable $th) {
+
+            if ($th instanceof ModelNotFoundException) {
+                return $this->errorResponse('Room không tồn tại', Response::HTTP_NOT_FOUND);
+            }
+
+            return $this->errorResponse($th->getMessage());
+        }
+    }
 
     /**
      * Remove the specified resource from storage.

@@ -93,6 +93,7 @@ class MovieController extends Controller
     {
         try {
             $result = Room::query()
+                ->select('id', 'name')
                 ->orderByDesc('id')
                 ->where('movie_id', $id)
                 ->get();
